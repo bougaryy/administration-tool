@@ -1,0 +1,51 @@
+
+
+#Ce script utilise une fonction Create-Group qui contient le code pour créer un groupe de sécurité dans Azure AD en utilisant les cmdlets Azure AD PowerShell. 
+
+
+
+# Authentification Azure AD Connect
+Connect-AzureAD
+
+# Fonction pour créer un groupe de sécurité
+function Create-Group {
+  # Demande à l'utilisateur de saisir la description du groupe
+  $description = Read-Host "Entrez la description du groupe de sécurité (Sécurité ou Microsoft 365"
+
+  # Demande à l'utilisateur de choisir les rôles à assigner au groupe
+  $roles = Read-Host "Entrez les rôles à assigner au groupe (Oui ou Non)"
+
+  # Demande à l'utilisateur de choisir le type d'appartenance du groupe
+  $membershipType = Read-Host "Choisissez le type d'appartenance du groupe (affecté, utilisateur dynamique ou appareil dynamique)"
+
+  # Création du groupe de sécurité
+  $group = New-AzureADMSGroup -DisplayName "Nom du groupe de sécurité" -MailNickName "nom_du_groupe"
+  $group | Add-AzureADMSGroupMember -MemberId "id_utilisateur"
+
+  # Configuration des champs du groupe de sécurité
+  Set-AzureADMSGroup -ObjectId $group.ObjectId -Description $description
+  Set-AzureADMSGroup -ObjectId $group.ObjectId -MailEnabled $true -MailNickname "nom_du_groupe"
+
+  # Assignation des rôles au groupe
+  foreach ($role in $roles) {
+    Add-AzureADMSGroupRole -ObjectId $group.ObjectId -RoleName $role
+  }
+
+  # Configuration du type d'appartenance du groupe
+  Set-AzureADMSGroup -ObjectId $group.ObjectId -MembershipType $membershipType
+
+  # Affichage du groupe de sécurité créé
+  Get-AzureADMSGroup -ObjectId $group.ObjectId
+}
+
+# Affichage de l'interface graphique
+while ($true) {
+  $choice = Show-Menu -Title "Gestion des groupes de sécurité Azure AD" -Options "Créer un groupe de sécurité", "Quitter"
+
+  if ($choice -eq "Créer un groupe de sécurité") {
+    Create-Group
+  }
+  else {
+    break
+  }
+}
