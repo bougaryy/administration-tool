@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# Script pour la gestion de ClamAV (Antivirus)
+# Auteur : bk
+
+# Vérification des privilèges
+if [ $(id -u) -ne 0 ]; then
+  echo "Ce script doit être exécuté en tant qu'administrateur."
+  exit 1
+fi
+
+# Chemin du fichier de configuration de ClamAV
+config_file="/etc/clamav/freshclam.conf"
+
+# Fonction pour installer ClamAV
+install_clamav() {
+  echo "Mise à jour des paquets..."
+  apt-get update && apt-get upgrade -y
+  echo "Installation de ClamAV..."
+  apt-get install -y clamav clamav-freshclam
+}
+
+# Fonction pour configurer ClamAV lors du premier lancement
+first_time_setup() {
+  echo "Configuration initiale de ClamAV..."
+  if [ ! -f "$config_file" ]; then
+    echo "Le fichier de configuration freshclam.conf n'existe pas."
+    exit 1
+  fi
+  read -p "Combien de fois par jour voulez-vous mettre à jour la base de données antivirale ? (par défaut : 24) " update_frequency
+  update_frequency=${update_frequency:-24}
+  sed -i "s/Checks .*/Checks $update_frequency/" $config_file
+}
+
+# Fonction pour mettre à jour ClamAV
+update_clamav() {
+  echo "Mise à jour de la base de données antivirale..."
+  
+  # Vérification si freshclam est déjà en cours d'exécution
+  if pgrep freshclam > /dev/null; then
+    echo "Une autre instance de freshclam est en cours d'exécution. Tentative d'arrêt..."
+    killall freshclam
+  fi
+  
+  # Exécution de la mise à jour
+  freshclam_status=$(freshclam 2>&1)
+  
+  # Vérification du statut
+  if [[ $freshclam_status == *"ERROR"* ]]; then
+    echo "Une erreur s'est produite lors de la mise à jour : $freshclam_status"
+    exit 1
+  else
+    echo "Mise à jour réussie."
+  fi
+}
+
+# Fonction pour exécuter un scan
+run_scan() {
+  read -p "Quel répertoire voulez-vous scanner ? (par défaut : /home) " scan_directory
+  scan_directory=${scan_directory:-/home}
+  echo "Exécution du scan sur $scan_directory..."
+  clamscan -i -r $scan_directory
+}
+
+# Fonction pour planifier un scan quotidien
+schedule_scan() {
+  read -p "À quelle heure voulez-vous planifier le scan quotidien ? (format HH:MM, par défaut : 23:00) " scan_time
+  scan_time=${scan_time:-23:00}
+  hour=${scan_time%:*}
+  minute=${scan_time#*:}
+  read -p "Quel répertoire voulez-vous scanner ? (par défaut : /home) " scan_directory
+  scan_directory=${scan_directory:-/home}
+  echo "$minute $hour * * * root clamscan -i -r $scan_directory >> /var/log/clamav/clamav-scheduled-scan.log" >> /etc/crontab
+}
+
+# Menu principal
+while true; do
+  echo "---- Menu ----"
+  echo "1) Installer ClamAV"
+  echo "2) Configuration initiale"
+  echo "3) Mettre à jour la base de données antivirale"
+  echo "4) Effectuer un scan maintenant"
+  echo "5) Planifier un scan quotidien"
+  echo "6) Quitter"
+  read -p "Choisissez une option: " option
+
+  case $option in
+    1)
+      install_clamav
+      ;;
+    2)
+      first_time_setup
+      ;;
+    3)
+      update_clamav
+      ;;
+    4)
+      run_scan
+      ;;
+    5)
+      schedule_scan
+      ;;
+    6)
+      echo "Au revoir !"
+      exit 0
+      ;;
+    *)
+      echo "Option invalide. Réessayez."
+      ;;
+  esac
+done
