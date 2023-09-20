@@ -1,0 +1,68 @@
+#Ce script Bash vous permet de gérer des bases de données MySQL directement depuis la ligne de commande by BK
+
+#!/bin/bash
+
+# Fonction pour afficher un message d'erreur et sortir du script
+die() {
+    echo >&2 "$@"
+    exit 1
+}
+
+# Vérifie si MySQL est installé et en cours d'exécution
+if ! command -v mysql &> /dev/null; then
+    die "MySQL n'est pas installé. Veuillez installer MySQL pour continuer."
+fi
+
+# Demande des identifiants
+read -p "Entrez le nom d'utilisateur MySQL : " username
+read -s -p "Entrez le mot de passe MySQL : " password
+echo
+
+# Liste les bases de données et vérifie si l'opération a réussi
+databases=$(mysql -u"$username" -p"$password" -e "SHOW DATABASES;" 2>/dev/null | grep -v Database)
+if [ $? -ne 0 ]; then
+    die "Impossible de récupérer la liste des bases de données. Vérifiez vos identifiants."
+fi
+
+while true; do
+    # Affiche le menu principal
+    echo "Menu de gestion de bases de données MySQL"
+    echo "1) Lister les bases de données"
+    echo "2) Créer une nouvelle base de données"
+    echo "3) Supprimer une base de données"
+    echo "4) Faire un dump d'une base de données"
+    echo "5) Restaurer une base de données"
+    echo "6) Quitter"
+    read -p "Sélectionnez une option : " option
+    
+    case "$option" in
+        1)
+            echo "Liste des bases de données :"
+            mysql -u"$username" -p"$password" -e "SHOW DATABASES;"
+            ;;
+        2)
+            read -p "Nom de la nouvelle base de données : " dbname
+            mysql -u"$username" -p"$password" -e "CREATE DATABASE $dbname;" && echo "Base de données $dbname créée."
+            ;;
+        3)
+            read -p "Nom de la base de données à supprimer : " dbname
+            mysql -u"$username" -p"$password" -e "DROP DATABASE $dbname;" && echo "Base de données $dbname supprimée."
+            ;;
+        4)
+            read -p "Nom de la base de données pour le dump : " dbname
+            dump_file="${dbname}_$(date +%Y%m%d%H%M%S).sql"
+            mysqldump -u"$username" -p"$password" "$dbname" > "$dump_file" && echo "Dump effectué dans le fichier $dump_file."
+            ;;
+        5)
+            read -p "Nom du fichier dump pour la restauration : " dumpfile
+            read -p "Nom de la base de données pour la restauration : " dbname
+            mysql -u"$username" -p"$password" "$dbname" < "$dumpfile" && echo "Base de données $dbname restaurée."
+            ;;
+        6)
+            exit 0
+            ;;
+        *)
+            echo "Option invalide."
+            ;;
+    esac
+done
